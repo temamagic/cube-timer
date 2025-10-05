@@ -43,14 +43,21 @@
       </div>
 
       <!-- Список результатов -->
-      <ul class="space-y-2 overflow-y-auto flex-1 pr-1">
+      <ul ref="resultList" class="space-y-2 overflow-y-auto flex-1 pr-1">
         <li 
-          v-for="(res, i) in sortedResults" 
+          v-for="(res, i) in results" 
           :key="i" 
-          class="bg-gray-700 px-3 py-2 rounded-lg flex justify-between"
+          class="bg-gray-700 px-3 py-2 rounded-lg flex justify-between items-center"
         >
           <span>№{{ i + 1 }}</span>
-          <span class="font-mono">{{ res.toFixed(2) }}s</span>
+          <div class="flex flex-col items-end">
+            <span class="font-mono">{{ res.toFixed(2) }}s</span>
+            <span v-if="i > 0" 
+              :class="diffClass(i)" 
+              class="text-xs">
+              {{ diffText(i) }}
+            </span>
+          </div>
         </li>
       </ul>
     </div>
@@ -78,7 +85,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     createApp({
       setup() {
@@ -89,12 +96,9 @@
         const isReady = ref(false);
         const holdTimeout = ref(null);
         const results = ref(JSON.parse(localStorage.getItem('cubeResults') || '[]'));
+        const resultList = ref(null);
 
         const displayTime = computed(() => time.value.toFixed(2));
-
-        const sortedResults = computed(() => 
-          [...results.value].sort((a, b) => a - b)
-        );
 
         const best = computed(() => 
           results.value.length ? Math.min(...results.value) : 0
@@ -121,11 +125,19 @@
           isRunning.value = true;
         };
 
-        const stopTimer = () => {
+        const stopTimer = async () => {
           clearInterval(timer.value);
           isRunning.value = false;
           results.value.push(time.value);
           localStorage.setItem('cubeResults', JSON.stringify(results.value));
+          await nextTick();
+          scrollToBottom();
+        };
+
+        const scrollToBottom = () => {
+          if (resultList.value) {
+            resultList.value.scrollTop = resultList.value.scrollHeight;
+          }
         };
 
         const resetResults = () => {
@@ -133,6 +145,17 @@
             results.value = [];
             localStorage.removeItem('cubeResults');
           }
+        };
+
+        const diffText = (index) => {
+          const diff = results.value[index] - results.value[index - 1];
+          const sign = diff > 0 ? '+' : '';
+          return `${sign}${diff.toFixed(2)}s`;
+        };
+
+        const diffClass = (index) => {
+          const diff = results.value[index] - results.value[index - 1];
+          return diff < 0 ? 'text-green-400' : 'text-red-400';
         };
 
         const handleKeyDown = (e) => {
@@ -166,11 +189,11 @@
         onMounted(() => {
           window.addEventListener('keydown', handleKeyDown);
           window.addEventListener('keyup', handleKeyUp);
+          scrollToBottom();
         });
 
         return { 
           displayTime, 
-          sortedResults, 
           resetResults, 
           isReady, 
           isRunning, 
@@ -178,7 +201,10 @@
           ao5, 
           ao12, 
           best, 
-          results 
+          results,
+          diffText,
+          diffClass,
+          resultList
         };
       }
     }).mount('#app');
