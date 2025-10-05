@@ -5,11 +5,18 @@
   <title>Cube Timer</title>
   <script src="./vue.global.prod.js"></script>
   <script src="./tailwind.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+  </style>
 </head>
-<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen">
-  <div id="app" class="w-full max-w-4xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- Левая колонка: результаты -->
-    <div class="bg-gray-800 rounded-2xl p-4 shadow-lg flex flex-col">
+<body class="bg-gray-900 text-gray-100 h-screen overflow-hidden">
+  <div id="app" class="flex h-full">
+    
+    <!-- Левая панель -->
+    <div class="w-80 bg-gray-800 h-full p-4 flex flex-col border-r border-gray-700">
       <div class="flex justify-between items-center mb-4">
         <h2 class="text-xl font-semibold">Результаты</h2>
         <button 
@@ -19,11 +26,24 @@
         </button>
       </div>
 
-      <div v-if="results.length >= 5" class="mb-3 text-gray-300">
-        <p><span class="font-semibold">AO5:</span> {{ ao5.toFixed(2) }}s</p>
+      <!-- Статистика -->
+      <div v-if="results.length > 0" class="grid grid-cols-3 gap-3 mb-4 text-center text-sm">
+        <div class="bg-gray-700 p-2 rounded-lg">
+          <div class="text-gray-400">Best</div>
+          <div class="font-mono text-lg">{{ best.toFixed(2) }}s</div>
+        </div>
+        <div class="bg-gray-700 p-2 rounded-lg" :class="{ 'opacity-50': results.length < 5 }">
+          <div class="text-gray-400">AO5</div>
+          <div class="font-mono text-lg">{{ ao5.toFixed(2) }}s</div>
+        </div>
+        <div class="bg-gray-700 p-2 rounded-lg" :class="{ 'opacity-50': results.length < 12 }">
+          <div class="text-gray-400">AO12</div>
+          <div class="font-mono text-lg">{{ ao12.toFixed(2) }}s</div>
+        </div>
       </div>
 
-      <ul class="space-y-2 overflow-y-auto max-h-[60vh]">
+      <!-- Список результатов -->
+      <ul class="space-y-2 overflow-y-auto flex-1 pr-1">
         <li 
           v-for="(res, i) in sortedResults" 
           :key="i" 
@@ -35,22 +55,26 @@
       </ul>
     </div>
 
-    <!-- Правая колонка: таймер -->
-    <div 
-      class="bg-gray-800 rounded-2xl p-4 shadow-lg flex flex-col justify-center items-center select-none">
+    <!-- Правая панель (таймер) -->
+    <div class="flex-1 flex flex-col justify-center items-center select-none">
       <div 
         :class="[
-          'text-6xl font-mono transition-colors duration-300',
-          isReady ? 'text-green-500' : (isHolding ? 'text-yellow-400' : (isRunning ? 'text-yellow-300' : 'text-gray-300'))
+          'text-[10vw] font-mono transition-colors duration-300 leading-none',
+          isReady ? 'text-green-500' : 
+          (isHolding ? 'text-yellow-400' : 
+          (isRunning ? 'text-yellow-300' : 'text-gray-300'))
         ]"
       >
         {{ displayTime }}
       </div>
-      <p class="mt-4 text-gray-500 text-sm text-center">
-        Удерживай пробел ≥ 1с — жёлтый (готовность), зелёный — старт при отпускании.  
+      <p class="mt-6 text-gray-500 text-sm text-center leading-relaxed max-w-md">
+        Удерживай <span class="text-yellow-400 font-semibold">Пробел</span> ≥ 1с — 
+        <span class="text-yellow-400">жёлтый</span> (ожидание),  
+        <span class="text-green-500">зелёный</span> — готов, отпусти чтобы начать.  
         Нажми снова, чтобы остановить.
       </p>
     </div>
+
   </div>
 
   <script>
@@ -72,15 +96,22 @@
           [...results.value].sort((a, b) => a - b)
         );
 
-        const ao5 = computed(() => {
-          if (results.value.length < 5) return 0;
-          const lastFive = results.value.slice(-5);
-          const sorted = [...lastFive].sort((a, b) => a - b);
+        const best = computed(() => 
+          results.value.length ? Math.min(...results.value) : 0
+        );
+
+        const calcAverage = (count) => {
+          if (results.value.length < count) return 0;
+          const last = results.value.slice(-count);
+          const sorted = [...last].sort((a, b) => a - b);
           sorted.shift(); // убрать лучший
           sorted.pop();   // убрать худший
           const sum = sorted.reduce((a, b) => a + b, 0);
           return sum / sorted.length;
-        });
+        };
+
+        const ao5 = computed(() => calcAverage(5));
+        const ao12 = computed(() => calcAverage(12));
 
         const startTimer = () => {
           const start = performance.now();
@@ -108,7 +139,6 @@
           if (e.code === 'Space' && !isHolding.value && !isRunning.value) {
             e.preventDefault();
             isHolding.value = true;
-            // Через 1 секунду — "готов"
             holdTimeout.value = setTimeout(() => {
               isReady.value = true;
             }, 1000);
@@ -146,6 +176,8 @@
           isRunning, 
           isHolding, 
           ao5, 
+          ao12, 
+          best, 
           results 
         };
       }
