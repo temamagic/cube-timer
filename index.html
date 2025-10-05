@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Cube Timer</title>
+  <script src="./vue.global.prod.js"></script>
+  <script src="./tailwind.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center min-h-screen">
+  <div id="app" class="w-full max-w-4xl p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Левая колонка: результаты -->
+    <div class="bg-gray-800 rounded-2xl p-4 shadow-lg flex flex-col">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold">Результаты</h2>
+        <button 
+          @click="resetResults" 
+          class="text-sm px-3 py-1 bg-red-600 hover:bg-red-700 rounded-lg">
+          Сбросить
+        </button>
+      </div>
+
+      <div v-if="results.length >= 5" class="mb-3 text-gray-300">
+        <p><span class="font-semibold">AO5:</span> {{ ao5.toFixed(2) }}s</p>
+      </div>
+
+      <ul class="space-y-2 overflow-y-auto max-h-[60vh]">
+        <li 
+          v-for="(res, i) in sortedResults" 
+          :key="i" 
+          class="bg-gray-700 px-3 py-2 rounded-lg flex justify-between"
+        >
+          <span>№{{ i + 1 }}</span>
+          <span class="font-mono">{{ res.toFixed(2) }}s</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Правая колонка: таймер -->
+    <div 
+      class="bg-gray-800 rounded-2xl p-4 shadow-lg flex flex-col justify-center items-center select-none">
+      <div 
+        :class="[
+          'text-6xl font-mono transition-colors duration-300',
+          isReady ? 'text-green-500' : (isHolding ? 'text-yellow-400' : (isRunning ? 'text-yellow-300' : 'text-gray-300'))
+        ]"
+      >
+        {{ displayTime }}
+      </div>
+      <p class="mt-4 text-gray-500 text-sm text-center">
+        Удерживай пробел ≥ 1с — жёлтый (готовность), зелёный — старт при отпускании.  
+        Нажми снова, чтобы остановить.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const time = ref(0);
+        const timer = ref(null);
+        const isRunning = ref(false);
+        const isHolding = ref(false);
+        const isReady = ref(false);
+        const holdTimeout = ref(null);
+        const results = ref(JSON.parse(localStorage.getItem('cubeResults') || '[]'));
+
+        const displayTime = computed(() => time.value.toFixed(2));
+
+        const sortedResults = computed(() => 
+          [...results.value].sort((a, b) => a - b)
+        );
+
+        const ao5 = computed(() => {
+          if (results.value.length < 5) return 0;
+          const lastFive = results.value.slice(-5);
+          const sorted = [...lastFive].sort((a, b) => a - b);
+          sorted.shift(); // убрать лучший
+          sorted.pop();   // убрать худший
+          const sum = sorted.reduce((a, b) => a + b, 0);
+          return sum / sorted.length;
+        });
+
+        const startTimer = () => {
+          const start = performance.now();
+          timer.value = setInterval(() => {
+            time.value = (performance.now() - start) / 1000;
+          }, 10);
+          isRunning.value = true;
+        };
+
+        const stopTimer = () => {
+          clearInterval(timer.value);
+          isRunning.value = false;
+          results.value.push(time.value);
+          localStorage.setItem('cubeResults', JSON.stringify(results.value));
+        };
+
+        const resetResults = () => {
+          if (confirm('Очистить все результаты?')) {
+            results.value = [];
+            localStorage.removeItem('cubeResults');
+          }
+        };
+
+        const handleKeyDown = (e) => {
+          if (e.code === 'Space' && !isHolding.value && !isRunning.value) {
+            e.preventDefault();
+            isHolding.value = true;
+            // Через 1 секунду — "готов"
+            holdTimeout.value = setTimeout(() => {
+              isReady.value = true;
+            }, 1000);
+          } else if (e.code === 'Space' && isRunning.value) {
+            e.preventDefault();
+            stopTimer();
+          }
+        };
+
+        const handleKeyUp = (e) => {
+          if (e.code === 'Space') {
+            clearTimeout(holdTimeout.value);
+            if (isReady.value && !isRunning.value) {
+              isReady.value = false;
+              isHolding.value = false;
+              time.value = 0;
+              startTimer();
+            } else {
+              isHolding.value = false;
+              isReady.value = false;
+            }
+          }
+        };
+
+        onMounted(() => {
+          window.addEventListener('keydown', handleKeyDown);
+          window.addEventListener('keyup', handleKeyUp);
+        });
+
+        return { 
+          displayTime, 
+          sortedResults, 
+          resetResults, 
+          isReady, 
+          isRunning, 
+          isHolding, 
+          ao5, 
+          results 
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
